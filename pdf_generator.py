@@ -30,7 +30,7 @@ import requests
 from PIL import Image
 from reportlab.lib.pagesizes import LETTER
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Table, TableStyle,
+    SimpleDocTemplate, Paragraph, Table, TableStyle, PageBreak,
     Image as RLImage, Spacer
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -54,6 +54,9 @@ BASE_URL = "https://api.osf.io/v2/nodes/"
 #HEADERS = {"Authorization": f"Bearer {OSF_TOKEN}"} if OSF_TOKEN else {}
 HEADERS = None
 
+timestamp = datetime.now(timezone("UTC")).astimezone().strftime('%Y-%m-%d %H:%M:%S %Z')
+project_qrcode = None
+
 def get_headers(project_type):
     if project_type == "Private":
         _headers= HEADERS = {"Authorization": f"Bearer {OSF_TOKEN}"}
@@ -76,38 +79,6 @@ def fetch_components(project_id):
     r = requests.get(f"{BASE_URL}{project_id}/children/", headers=HEADERS)
     r.raise_for_status()
     return r.json()["data"]
-
-'''
-def fetch_files(component_id):
-    files_api = f"{BASE_URL}{component_id}/files/"
-    response = requests.get(files_api, headers=HEADERS)
-    response.raise_for_status()
-    storage_providers = response.json()["data"]
-    all_files = []
-    for provider in storage_providers:
-        files_url = provider["relationships"]["files"]["links"]["related"]["href"]
-        response = requests.get(files_url, headers=HEADERS)
-        if response.status_code == 200:
-            files = response.json()["data"]
-            for f in files:
-                if f["attributes"]["kind"] == "file":
-                    all_files.append({
-                        "name": f["attributes"]["name"],
-                        "size": f["attributes"]["size"],
-                        "link": f["links"]["download"]
-                    })
-                elif f["attributes"]["kind"] == "folder":
-                    folder_url = f["relationships"]["files"]["links"]["related"]["href"]
-                    folder_files = requests.get(folder_url, headers=HEADERS).json()["data"]
-                    for subf in folder_files:
-                        if subf["attributes"]["kind"] == "file":
-                            all_files.append({
-                                "name": f"{f['attributes']['name']}/{subf['attributes']['name']}",
-                                "size": subf["attributes"]["size"],
-                                "link": subf["links"]["download"]
-                            })
-    return all_files
-'''
 
 
 def fetch_files(component_id, storage_provider="osfstorage"):
@@ -270,13 +241,34 @@ def render_wiki_section(project_id, story, styles):
         story.append(Paragraph("Error", styles["MyHeading3"]))
         story.append(Paragraph(f"Could not fetch wiki: {e}", styles["Normal"]))
 
-#def build_pdf(project_id, isTest, output_path="/content/drive/MyDrive/osf_pdf/OSF_Full_Metadata_Project_38.pdf"):
-#def build_pdf(project_id, isTest=False, output_path="osf_project_export_1.pdf", api_token=None):
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.pagesizes import LETTER
+from reportlab.lib.units import inch
+from reportlab.lib.utils import ImageReader
+from functools import partial
+from datetime import datetime
+import os
+
+def add_page_number(canvas, doc, timestamp, project_qrcode):
+    canvas.saveState()
+    canvas.setFont('Times-Roman', 10)
+    page_number_text = f"{doc.page}"
+
+    canvas.drawString(0.75 * inch, 0.75 * inch, f"Exported: {timestamp}")
+    canvas.drawString(7.25 * inch, 0.75 * inch, f"Page: {page_number_text}")
+
+    # Draw QR Code on each page
+    if project_qrcode:
+        canvas.drawImage(project_qrcode, 4.00 * inch, 0.75 * inch, width=0.5 * inch, height=0.5 * inch)
+
+    canvas.restoreState()
+
 def build_pdf(project_id, isTest=False, output_path=None, api_token=None, project_type=None):
     token = api_token
     HEADERS = get_headers(project_type)
+
     if project_type == "Private":
-        # Replace internal token loading with:
         token = api_token
         if not token:
             from dotenv import load_dotenv
@@ -288,47 +280,59 @@ def build_pdf(project_id, isTest=False, output_path=None, api_token=None, projec
     metadata = fetch_project_metadata(project_id)
     contributors = fetch_contributors(project_id)
     components = fetch_components(project_id)
-    if isTest:
-      project_url = f"https://test.osf.io/{project_id}/"
-    else:
-      project_url = f"https://osf.io/{project_id}/"
+
+    project_url = f"https://{'test' if isTest else 'osf'}.io/{project_id}/"
+    #timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     timestamp = datetime.now(timezone("UTC")).astimezone().strftime('%Y-%m-%d %H:%M:%S %Z')
-    
-    
+
     doc = SimpleDocTemplate(output_path, pagesize=LETTER)
+
+    # Styles
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle(name='MyHeading1', parent=styles['Heading1'], fontSize=18, spaceAfter=10))
     styles.add(ParagraphStyle(name='MyHeading2', parent=styles['Heading2'], fontSize=14, spaceAfter=6, spaceBefore=12))
     styles.add(ParagraphStyle(name='MyHeading3', parent=styles['Heading3'], fontSize=12, spaceAfter=4, spaceBefore=10))
     styles.add(ParagraphStyle(name='MyHeading4', parent=styles['Heading4'], fontSize=8, spaceAfter=4, spaceBefore=10))
     styles.add(ParagraphStyle(name='MyHeading5', parent=styles['Heading5'], fontSize=7, spaceAfter=4, spaceBefore=10))
+    
     story = []
 
+    # Title and Project URL
     story.append(Paragraph(metadata["attributes"]["title"], styles["MyHeading1"]))
     story.append(Paragraph(f"Project URL: <a href='{project_url}'>{project_url}</a>", styles["Normal"]))
-    qr_img = generate_qr_code(project_url)
-    story.append(RLImage(qr_img, width=1.5*inch, height=1.5*inch))
+
+    # QR Code
+    qr_img_io = generate_qr_code(project_url)  # Returns BytesIO
+    qr_img_io.seek(0)
+
+    # For the body of the PDF — use BytesIO
+    story.append(RLImage(qr_img_io, width=1.5 * inch, height=1.5 * inch))
     story.append(Spacer(1, 12))
 
+    # For page footer — wrap in ImageReader
+    project_qrcode = ImageReader(qr_img_io)
+    story.append(Spacer(1, 12))
+
+    # Metadata Sections
     render_metadata_section(metadata, story, styles, timestamp)
     render_contributors_section(contributors, story, styles)
-
+    story.append(PageBreak())
     render_file_table(fetch_files(project_id), story, styles, "Files in Main Project")
-
     render_wiki_section(project_id, story, styles)
 
+    # Components
     story.append(Paragraph("5. Components and Their Files", styles["MyHeading2"]))
     for comp in components:
         title = comp["attributes"]["title"]
         comp_id = comp["id"]
         comp_url = comp["links"]["html"]
+
         story.append(Paragraph(title, styles["MyHeading3"]))
         story.append(Paragraph(f"Component URL: <a href='{comp_url}'>{comp_url}</a>", styles["Normal"]))
-        render_file_table(fetch_files(comp_id), story, styles)    
+        render_file_table(fetch_files(comp_id), story, styles)
 
-    doc.build(story)
+    # Add Page Number and QR on all pages
+    add_page_func = partial(add_page_number, timestamp=timestamp, project_qrcode=project_qrcode)
+    doc.build(story, onFirstPage=add_page_func, onLaterPages=add_page_func)
+
     return output_path
-
-# Example usage:
-#build_pdf("kzc68", False) #Public OSF.io
-#build_pdf("ymr37", False)

@@ -1,6 +1,8 @@
 # PDFs
 *.pdf
 !osfio-export-tool/tests/good-pdfs/*.pdf
+exported_pdfs/
+.DS_Store
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -199,3 +201,4 @@ cython_debug/
 .cursorindexingignore
 
 __pycache__/pdf_generator.cpython-311.pyc
+

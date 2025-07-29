@@ -30,10 +30,6 @@ import os
 import tempfile
 from datetime import datetime
 
-import exporter.exporter as exporter
-
-st.write(exporter.MockAPIResponse.MARKDOWN_FILES)
-
 
 #page configuration
 st.set_page_config(page_title="Export & Download OSF project to PDF",
@@ -85,7 +81,7 @@ if project_type == "Private":
         load_dotenv()
         osf_token = os.getenv("OSF_TOKEN")
 
-st.write(osf_token)
+#st.write(osf_token)
 
 # Output folder
 output_dir = "exported_pdfs"
