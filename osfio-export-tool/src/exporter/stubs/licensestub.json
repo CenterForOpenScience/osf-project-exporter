@@ -1,0 +1,18 @@
+{
+    "data": {
+        "id": "x",
+        "type": "licenses",
+        "attributes": {
+            "name": "mynewlicense",
+            "text": "this is a fancy license",
+            "url": "url",
+            "required_fields": []
+        },
+        "links": {
+            "self": "link"
+        }
+    },
+    "meta": {
+        "version": "2.20"
+    }
+}

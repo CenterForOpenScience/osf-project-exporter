@@ -1,0 +1,11 @@
+{
+    "data": [
+        {
+            "id": "cos",
+            "type": "institutions",
+            "attributes": {
+                "name": "Center For Open Science [Test]"
+            }
+        }
+    ]
+}

@@ -1,0 +1,44 @@
+{
+    "data": {
+        "id": "x",
+        "type": "custom-item-metadata-records",
+        "attributes": {
+            "language": "eng",
+            "resource_type_general": "Other",
+            "funders": [
+                {
+                    "funder_name": "funder1",
+                    "funder_identifier": "123456",
+                    "funder_identifier_type": "ROR",
+                    "award_number": "fund-1234",
+                    "award_uri": "https://click.palletsprojects.com/en/stable/changes/",
+                    "award_title": "A Research Grant"
+                },
+                {
+                    "funder_name": "funder1",
+                    "funder_identifier": "https://doi.org/12,918eufusdduds",
+                    "funder_identifier_type": "Crossref Funder ID",
+                    "award_number": "123",
+                    "award_uri": "",
+                    "award_title": "title2"
+                }
+            ]
+        },
+        "relationships": {
+            "guid": {
+                "links": {
+                    "related": {
+                        "href": "https://api.test.osf.io/v2/guids/x/",
+                        "meta": {}
+                    }
+                }
+            }
+        },
+        "links": {
+            "self": "https://api.test.osf.io/v2/custom_item_metadata_records/x/"
+        }
+    },
+    "meta": {
+        "version": "2.20"
+    }
+}

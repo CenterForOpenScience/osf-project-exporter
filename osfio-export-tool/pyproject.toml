@@ -1,0 +1,37 @@
+[project]
+name = "osfio-export-tool"
+version = "0.0.1"
+description = "OSF Export CLI tool"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.1",
+    "fpdf2==2.8.3",
+    "pypdf==5.7.0",
+    "mistletoe==1.4.0",
+    "qrcode==8.2"
+]
+
+[project.scripts]
+# Executable scripts, names are commands
+clirun = "client.cli:cli"
+
+[build-system]
+requires = ["flit_core<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.module]
+name = "client"
+
+[tool.black]
+line-length=88
+preview=true
+
+[tool.flake8]
+max-line-length=88
+
+[tool.ruff]
+line-length=88
+exclude = ["**/migrations/*.py", "tests/*"]
+
+[tool.ruff.lint]
+select = ["E", "F"]

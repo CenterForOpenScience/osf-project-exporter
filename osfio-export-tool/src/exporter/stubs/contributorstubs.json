@@ -1,0 +1,44 @@
+{
+    "data": [
+        {
+            "id": "x",
+            "type": "contributors",
+            "attributes": {
+                "index": 0,
+                "bibliographic": true,
+                "permission": "admin",
+                "unregistered_contributor": null,
+                "is_curator": false
+            },
+            "embeds": {
+                "users": {
+                    "data": {
+                        "attributes": {
+                            "full_name": "Test User 1"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "id": "y",
+            "type": "contributors",
+            "attributes": {
+                "index": 0,
+                "bibliographic": true,
+                "permission": "admin",
+                "unregistered_contributor": null,
+                "is_curator": false
+            },
+            "embeds": {
+                "users": {
+                    "data": {
+                        "attributes": {
+                            "full_name": "Test User 2"
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

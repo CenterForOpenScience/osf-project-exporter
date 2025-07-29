@@ -1,0 +1,6 @@
+click==8.2.1
+fpdf2==2.8.3
+pypdf==5.7.0
+mistletoe==1.4.0
+flake8==7.3.0
+qrcode==8.2

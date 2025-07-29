@@ -1,0 +1,11 @@
+services:
+  cli:
+    container_name: osfio-export-cli
+    build:
+      context: .
+      dockerfile: dockerfile
+    env_file: ".env"
+    restart: unless-stopped
+    tty: true
+    volumes:
+      - ./osfio-export-tool:/code/app/
