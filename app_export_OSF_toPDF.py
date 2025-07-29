@@ -30,6 +30,10 @@ import os
 import tempfile
 from datetime import datetime
 
+import exporter.exporter as exporter
+
+st.write(exporter.MockAPIResponse.MARKDOWN_FILES)
+
 
 #page configuration
 st.set_page_config(page_title="Export & Download OSF project to PDF",
