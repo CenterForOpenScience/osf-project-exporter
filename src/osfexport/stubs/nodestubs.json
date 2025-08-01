@@ -6,7 +6,7 @@
             "attributes": {
                 "title": "Test1",
                 "description": "Test1 Description",
-                "category": "project",
+                "category": "methods and measures",
                 "custom_citation": null,
                 "date_created": "2000-01-01T14:18:00.376705Z",
                 "date_modified": "2000-01-01T14:18:00.376705Z",
@@ -30,7 +30,7 @@
                 "current_user_is_contributor": true,
                 "current_user_is_contributor_or_group_member": true,
                 "wiki_enabled": true,
-                "public": false
+                "public": true
             },
             "relationships": {
                 "license": {
@@ -64,7 +64,7 @@
                 "contributors": {
                     "links": {
                         "related": {
-                            "href": "https://api.test.osf.io/v2/nodes/x/contributors/",
+                            "href": "contributors",
                             "meta": {}
                         }
                     }
@@ -327,7 +327,7 @@
             "attributes": {
                 "title": "Test2",
                 "description": "Test2 Description",
-                "category": "project",
+                "category": "",
                 "custom_citation": null,
                 "date_created": "2000-01-01T14:18:00.376705Z",
                 "date_modified": "2000-01-01T14:18:00.376705Z",
@@ -372,7 +372,7 @@
                 "contributors": {
                     "links": {
                         "related": {
-                            "href": "https://api.test.osf.io/v2/nodes/x/contributors/",
+                            "href": "contributors",
                             "meta": {}
                         }
                     }
@@ -680,7 +680,7 @@
                 "contributors": {
                     "links": {
                         "related": {
-                            "href": "https://api.test.osf.io/v2/nodes/x/contributors/",
+                            "href": "contributors",
                             "meta": {}
                         }
                     }
@@ -997,7 +997,7 @@
                 "contributors": {
                     "links": {
                         "related": {
-                            "href": "https://api.test.osf.io/v2/nodes/x/contributors/",
+                            "href": "contributors/",
                             "meta": {}
                         }
                     }
@@ -1327,7 +1327,7 @@
                 "contributors": {
                     "links": {
                         "related": {
-                            "href": "https://api.test.osf.io/v2/nodes/x/contributors/",
+                            "href": "contributors/",
                             "meta": {}
                         }
                     }

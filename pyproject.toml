@@ -1,0 +1,51 @@
+[project]
+name = "osfio-export-tool"
+version = "0.0.8"
+authors = [
+  { name="Benito Matischen", email="benito.matischen@manchester.ac.uk" },
+]
+description = "A package for exporting OSF projects via, e.g., a CLI."
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "Apache-2.0"
+license-files = ["LICEN[CS]E*"]
+dependencies = [
+    "click>=8.1",
+    "fpdf2",
+    "pypdf",
+    "mistletoe",
+    "qrcode"
+]
+
+[project.urls]
+Homepage = "https://github.com/CenterForOpenScience/osf-project-exporter/tree/development"
+Issues = "https://github.com/CenterForOpenScience/osf-project-exporter/issues"
+
+[project.scripts]
+# Executable scripts, names are commands
+clirun = "osfexport.cli:cli"
+
+[build-system]
+requires = ["flit_core<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.module]
+name = "osfexport"
+
+[tool.black]
+line-length=88
+preview=true
+
+[tool.flake8]
+max-line-length=88
+
+[tool.ruff]
+line-length=88
+exclude = ["**/migrations/*.py", "tests/*"]
+
+[tool.ruff.lint]
+select = ["E", "F"]

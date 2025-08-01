@@ -3,33 +3,56 @@ import urllib.request as webhelper
 
 import click
 
-import exporter as exporter
+import osfexport.exporter as exporter
 
 API_HOST_TEST = os.getenv('API_HOST_TEST', 'https://api.test.osf.io/v2')
 API_HOST_PROD = os.getenv('API_HOST_PROD', 'https://api.osf.io/v2')
 
 
-def extract_project_id(url):
-    """Extract project ID from a given OSF project URL.
+def prompt_pat(project_id='', usetest=False):
+    """
+    Ask for a PAT if exporting a single project or all projects a user has.
 
     Parameters
-    ----------
-    url: str
-        URL of the OSF project.
+    -------------
+        project_id: str
+            ID of a single project to export.
+            If one provided then ask for a PAT.
+        usetest: bool
+            Flag to indicate whether to use the test/production API server.
 
     Returns
-    -------
-    str
-        Project ID extracted from the URL.
+    -----------------
+        pat: str
+            Personal Access Token to use to authorise a user.
     """
 
-    project_id = url.strip("/").split("/")[-1]
-    return project_id
+    if usetest:
+        api_host = API_HOST_TEST
+    else:
+        api_host = API_HOST_PROD
+
+    if not project_id:
+        pat = click.prompt(
+            'Please enter your PAT to export all your projects',
+            type=str,
+            hide_input=True
+        )
+    elif not exporter.is_public(f'{api_host}/nodes/{project_id}/'):
+        pat = click.prompt(
+            'Please enter your PAT to export this private project',
+            type=str,
+            hide_input=True
+        )
+    else:
+        pat = ''
+
+    return pat
 
 
 @click.command()
 @click.option('--pat', type=str, default='',
-              prompt=True, hide_input=True,
+              prompt='Enter your PAT', prompt_required=False, hide_input=True,
               help='Personal Access Token to authorise OSF account access.')
 @click.option('--dryrun', is_flag=True, default=False,
               help='If enabled, use mock responses in place of the API.')
@@ -45,17 +68,20 @@ def extract_project_id(url):
               For example: https://osf.io/dry9j/
 
               Leave blank to export all projects you have access to.""")
-def export_projects(pat, folder, dryrun=False, url='', usetest=False):
+def export_projects(folder, pat='', dryrun=False, url='', usetest=False):
     """Pull and export OSF projects to a PDF file.
     You can export all projects you have access to, or one specific one
     with the --url option."""
 
     project_id = ''
     if url:
-        project_id = extract_project_id(url)
+        project_id = exporter.extract_project_id(url)
         click.echo(f'Extracting project with ID: {project_id}')
     else:
         click.echo('No project ID provided, extracting all projects.')
+
+    if not pat:
+        pat = prompt_pat(project_id=project_id, usetest=usetest)
 
     click.echo('Downloading project data...')
     projects, root_nodes = exporter.get_project_data(

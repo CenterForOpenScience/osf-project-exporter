@@ -20,6 +20,23 @@ STUBS_DIR = os.path.join(
 BLUE = (173, 216, 230)
 HEADINGS_STYLE = FontFace(emphasis="BOLD", fill_color=BLUE)
 
+def extract_project_id(url):
+    """Extract project ID from a given OSF project URL.
+
+    Parameters
+    ----------
+    url: str
+        URL of the OSF project.
+
+    Returns
+    -------
+    str
+        Project ID extracted from the URL.
+    """
+
+    project_id = url.strip("/").split("/")[-1]
+    return project_id
+
 
 def get_host(is_test):
     """Get API host based on flag.
@@ -36,6 +53,23 @@ def get_host(is_test):
     """
 
     return API_HOST_TEST if is_test else API_HOST_PROD
+
+
+def is_public(url):
+    """Return boolean to indicate if a URL is public (True) or not (False).
+
+    Parameters
+    ------------
+    url: str
+        The URL to test.
+    """
+
+    request = webhelper.Request(url, method='GET')
+    try:
+        result = webhelper.urlopen(request).status
+    except webhelper.HTTPError as e:
+        result = e
+    return result == 200
 
 
 class MockAPIResponse:
@@ -130,12 +164,18 @@ class PDF(FPDF):
         date_printed: datetime
             Date and time when the project was exported.
         url: str
-            URL to include in QR codes.
+            Current URL to include in QR codes.
+        parent_url: str
+            URL of root project to use in component sections.
+        parent_title: str
+            Title of root project to use in component sections.
     """
 
-    def __init__(self, url=''):
+    def __init__(self, url='', parent_url='', parent_title=''):
         super().__init__()
         self.date_printed = datetime.datetime.now().astimezone()
+        self.parent_url = parent_url
+        self.parent_title = parent_title
         self.url = url
 
     def generate_qr_code(self):
@@ -151,9 +191,10 @@ class PDF(FPDF):
         self.set_font('Times', size=10)
         self.cell(0, 10, f"Page: {self.page_no()}", align="C")
         self.set_x(10)
-        self.cell(0, 10, f"Printed: {self.date_printed.strftime(
+        timestamp = self.date_printed.strftime(
             '%Y-%m-%d %H:%M:%S %Z'
-        )}", align="L")
+        )
+        self.cell(0, 10, f"Exported: {timestamp}", align="L")
         self.set_x(10)
         self.set_y(-25)
         qr_img = self.generate_qr_code()
@@ -409,12 +450,21 @@ def get_project_data(pat, dryrun=False, project_id='', usetest=False):
         else:
             added_node_ids.add(project['id'])
 
+        # Define nice representations of categories if needed
+        CATEGORY_STRS = {
+            '': 'Uncategorized',
+            'methods and measures': 'Methods and Measures'
+        }
+
         project_data = {
             'metadata': {
                 'title': project['attributes']['title'],
                 'id': project['id'],
                 'url': project['links']['html'],
                 'description': project['attributes']['description'],
+                'category': CATEGORY_STRS[project['attributes']['category']]
+                    if project['attributes']['category'] in CATEGORY_STRS
+                    else project['attributes']['category'].title(),
                 'date_created': datetime.datetime.fromisoformat(
                     project['attributes']['date_created']
                 ).astimezone().strftime('%Y-%m-%d'),
@@ -422,7 +472,8 @@ def get_project_data(pat, dryrun=False, project_id='', usetest=False):
                     project['attributes']['date_modified']
                 ).astimezone().strftime('%Y-%m-%d'),
                 'tags': ', '.join(project['attributes']['tags'])
-                if project['attributes']['tags'] else 'NA',
+                    if project['attributes']['tags'] else 'NA',
+                'public': project['attributes']['public'],
                 'resource_type': 'NA',
                 'resource_lang': 'NA',
                 'funders': []
@@ -494,10 +545,13 @@ def get_project_data(pat, dryrun=False, project_id='', usetest=False):
                     # Required data can either be embedded or in attributes
                     if 'embeds' in item and key != "subjects":
                         if 'users' in item['embeds']:
-                            values.append(
+                            values.append((
                                 item['embeds']['users']['data']
-                                ['attributes']['full_name']
-                            )
+                                ['attributes']['full_name'],
+                                item['attributes']['bibliographic'],
+                                item['embeds']['users']['data']
+                                ['links']['html']
+                            ))
                         else:
                             values.append(item['embeds']['attributes']['name'])
                     else:
@@ -514,11 +568,6 @@ def get_project_data(pat, dryrun=False, project_id='', usetest=False):
             if isinstance(values, list):
                 if key != 'contributors':
                     values = ', '.join(values)
-                else:
-                    contributors = []
-                    for c in values:
-                        contributors.append((c, False, 'N/A'))
-                    values = contributors
 
             if key in METADATA_RELATIONS:
                 project_data['metadata'][key] = values
@@ -626,7 +675,7 @@ def write_pdf(projects, root_idx, folder=''):
                 markdown=True
             )
 
-    def write_project_body(pdf, project, parent_title=''):
+    def write_project_body(pdf, project):
         """Write the body of a project to the PDF.
 
         Parameters
@@ -648,23 +697,47 @@ def write_pdf(projects, root_idx, folder=''):
         wikis = project['wikis']
 
         # Write header section
-        title = project['metadata']['title']
         pdf.set_font('Times', size=18, style='B')
-        if parent_title:
-            pdf.multi_cell(0, h=0, text=f'{parent_title} /\n', align='L')
-        pdf.multi_cell(0, h=0, text=f'{title}\n', align='L')
-        pdf.set_font('Times', size=12)
+        # Write parent header and title first
+        if pdf.parent_title:
+            pdf.multi_cell(0, h=0, text=f'{pdf.parent_title}\n', align='L')
+        if pdf.parent_url:
+            pdf.set_font('Times', size=12)
+            pdf.cell(
+                text='Main Project URL:', align='L'
+            )
+            pdf.cell(
+                text=f'{pdf.parent_url}\n', align='L', link=pdf.parent_url
+            )
+            pdf.write(0, '\n\n')
+
+        # Check if title, url is of parent's to avoid duplication
+        title = project['metadata']['title']
+        if pdf.parent_title != title:
+            pdf.set_font('Times', size=18, style='B')
+            pdf.multi_cell(0, h=0, text=f'{title}\n', align='L')
+
+        # Pop URL field to avoid printing it out in Metadata section
         url = project['metadata'].pop('url', '')
-        if url:
-            pdf.multi_cell(
-                0, h=0,
-                text=f'Project URL: {url}\n',
+
+        pdf.url = url  # Set current URL to use in QR codes
+        qr_img = pdf.generate_qr_code()
+        pdf.image(qr_img, w=30, x=Align.R, y=5)
+
+        pdf.set_font('Times', size=12)
+        if url and pdf.parent_url != url:
+            pdf.cell(
+                text='Component URL:',
                 align='L'
             )
-            pdf.url = url
-        qr_img = pdf.generate_qr_code()
-        pdf.image(qr_img, w=30, x=Align.C)
+            pdf.cell(
+                text=f'{url}',
+                align='L',
+                link=url
+            )
+            pdf.write(0, '\n\n')
 
+        pdf.ln()
         pdf.ln()
 
         # Write title for metadata section, then actual fields
@@ -687,15 +760,18 @@ def write_pdf(projects, root_idx, folder=''):
             row = table.row()
             row.cell('Name')
             row.cell('Bibliographic?')
-            row.cell('Email (if available)')
+            row.cell('Profile Link')
             for data_row in project['contributors']:
                 row = table.row()
-                for datum in data_row:
+                for idx, datum in enumerate(data_row):
                     if datum is True:
                         datum = 'Yes'
                     if datum is False:
-                        datum = 'N/A'
-                    row.cell(datum)
+                        datum = 'No'
+                    if idx == 2:
+                        row.cell(text=datum, link=datum)
+                    else:
+                        row.cell(datum)
         pdf.write(0, '\n')
         pdf.write(0, '\n')
 
@@ -718,12 +794,15 @@ def write_pdf(projects, root_idx, folder=''):
                 row.cell('Download Link')
                 for data_row in project['files']:
                     row = table.row()
-                    for datum in data_row:
+                    for idx, datum in enumerate(data_row):
                         if datum is True:
                             datum = 'Yes'
                         if datum is False or datum is None:
                             datum = 'N/A'
-                        row.cell(datum)
+                        if idx == 2:
+                            row.cell(text=datum, link=datum)
+                        else:
+                            row.cell(datum)
         else:
             pdf.write(0, '\n')
             pdf.multi_cell(
@@ -747,7 +826,7 @@ def write_pdf(projects, root_idx, folder=''):
 
         return pdf
 
-    def explore_project_tree(project, projects, pdf=None, parent_title=''):
+    def explore_project_tree(project, projects, pdf=None):
         """Recursively find child projects and write them to the PDF.
 
         Parameters
@@ -768,10 +847,13 @@ def write_pdf(projects, root_idx, folder=''):
 
         # Start with no PDF at root projects
         if not pdf:
-            pdf = PDF()
+            pdf = PDF(
+                parent_title=project['metadata']['title'],
+                parent_url=project['metadata']['url']
+            )
 
         # Add current project to PDF
-        pdf = write_project_body(pdf, project, parent_title=parent_title)
+        pdf = write_project_body(pdf, project)
 
         # Do children last so that come at end of the PDF
         children = project['children']
@@ -780,10 +862,8 @@ def write_pdf(projects, root_idx, folder=''):
                 (p for p in projects if p['metadata']['id'] == child_id), None
             )
             if child_project:
-                # Pass current title to include in component header
-                parent_title = project['metadata']['title']
                 pdf = explore_project_tree(
-                    child_project, projects, pdf=pdf, parent_title=parent_title
+                    child_project, projects, pdf=pdf
                 )
 
         return pdf
@@ -792,12 +872,19 @@ def write_pdf(projects, root_idx, folder=''):
     title = curr_project['metadata']['title']
     pdf = explore_project_tree(curr_project, projects)
 
-    # Be flexible for users by allowing saving in new folders
-    # and displaying the path the PDF is located at
-    filename = f'{title}_export.pdf'
-    if not os.path.exists(folder):
-        os.mkdir(folder)
-    path = os.path.join(folder, filename)
+    # Remove spaces in file name for better behaviour on Linux
+    # Add timestamp to allow distinguishing between PDFs at a glance
+    timestamp = pdf.date_printed.strftime(
+        '%Y-%m-%d %H:%M:%S %Z'
+    ).replace(' ', '-')
+    filename = f'{title.replace(' ', '-')}-{timestamp}.pdf'
+
+    if folder:
+        if not os.path.exists(folder):
+            os.mkdir(folder)
+        path = os.path.join(os.getcwd(), folder, filename)
+    else:
+        path = os.path.join(os.getcwd(), filename)
     pdf.output(path)
 
     return pdf, path

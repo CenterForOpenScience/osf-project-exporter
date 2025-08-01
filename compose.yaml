@@ -8,4 +8,4 @@ services:
     restart: unless-stopped
     tty: true
     volumes:
-      - ./osfio-export-tool:/code/app/
+      - .:/code/app/
