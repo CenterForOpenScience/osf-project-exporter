@@ -25,96 +25,92 @@
 '''
 
 import streamlit as st
-from pdf_generator import build_pdf
-import os
 import tempfile
+import osfexport
+import shutil
 from datetime import datetime
 
+st.set_page_config(page_title="OSF PDF Export Tool", layout="centered")
+st.title("🔄 OSF Project to PDF")
 
-#page configuration
-st.set_page_config(page_title="Export & Download OSF project to PDF",
-                   #page_icon=":outbox_tray:",
-                   page_icon=":arrow_down:",
-                   layout="centered")
+# --- Dev settings and submit button ---
+with st.form("export_form"):   
+   dryrun = st.checkbox("Use test/mock data (Dry run)?", value=True)
+   usetest = st.checkbox("Use OSF Test API?", value=True)
+   if usetest:
+       api_host = "https://api.test.osf.io/v2"
+   else:
+       api_host = "https://api.osf.io/v2"
+   submitted = st.form_submit_button("Export to PDF")
 
-#REMOVE THE SETTING OPTIONS
-st.markdown("""
-    <style>
-        .reportview-container {
-            margin-top: -2em;
-        }
-        #MainMenu {visibility: hidden;}
-        .stDeployButton {display:none;}
-        footer {visibility: hidden;}
-        #stDecoration {display:none;}
-    </style>
-""", unsafe_allow_html=True)
+# Choose to export multiple or single project - ask for id if needed
+st.subheader("🔐 OSF Project Type")
+project_groups = st.radio("Choose projects to export:", ["All projects where I'm a Contributor", "Single Project"])
+project_id = ''
+if project_groups == "Single Project":
+    project_url = st.text_input("📁 Enter OSF Project URL or ID:", placeholder="e.g. 'https://osf.io/abcde/' OR 'abcde'")
+    project_id = osfexport.extract_project_id(project_url) if project_url else ''
+    if not project_id:
+        st.info("Leave project URL blank to export all your projects.")
+    else:
+        st.info(f"Exporting Project with ID: {project_id}")
 
-
-st.title("📄 OSF Project PDF Exporter")
-
-# Input fields
-url = None
-url = st.text_input("Enter OSF Project URL:", max_chars=30)
-if url!="":
-    osf_id = url.split(".io/")[1].strip("/")
-    st.write(osf_id)
-
-
-api_choice = st.radio("Select API Environment:", ["Production", "Test"])
-is_test = True if api_choice == "Test" else False
-
-
-st.subheader("🔐 OSF Project type")
-project_type = st.radio("Choose project visibility: ", ["Public", "Private"])
-
-osf_token = None
-if project_type == "Private":
-    # Token input
+# Request a PAT if getting multiple projects or a private project
+pat = ''
+is_public = True
+if project_groups == "All projects where I'm a Contributor":
+    st.info("To export all projects, you will need to provide a Personal Access Token (PAT).")
     st.subheader("🔑 OSF Token")
-    token_source = st.radio("Choose token source:", ["Paste token manually", "Use .env file"])
-
-    if token_source == "Paste token manually":
-        osf_token = st.text_input("Enter your OSF API token:", type="password")
+    pat = st.text_input("Enter your OSF API token:", type="password")
+if project_groups == "Single Project" and project_id != '':
+    is_public = osfexport.is_public(f'{api_host}/nodes/{project_id}/')
+    if not is_public:
+        st.info("To export a private project, you will need to provide a Personal Access Token (PAT).")
+        st.subheader("🔑 OSF Token")
+        pat = st.text_input("Enter your OSF API token:", type="password")
     else:
-        from dotenv import load_dotenv
-        load_dotenv()
-        osf_token = os.getenv("OSF_TOKEN")
+        st.info("The project is public, no token is required.")
 
-#st.write(osf_token)
+# Only do exporting if using local JSON files for a test run or exporting a single public project
+is_private_single = project_groups == "Single Project" and not is_public
+is_exporting_all = project_groups == "All projects where I'm a Contributor"
+if submitted:
+   if not pat and not dryrun and (is_exporting_all or is_private_single):
+       st.warning("Please provide a Personal Access Token unless using dry run mode.")
+   else:
+    with st.spinner("Generating PDF... Please wait."):
+        projects, root_nodes = osfexport.get_nodes(
+            pat=pat,
+            dryrun=dryrun,
+            project_id=project_id,
+            usetest=usetest
+        )
+        if not root_nodes:
+            st.error("No projects found.")
 
-# Output folder
-output_dir = "exported_pdfs"
-os.makedirs(output_dir, exist_ok=True)
-
-if st.button("Generate PDF"):
-    if osf_id.strip() == "":
-        st.warning("Please enter a valid OSF Project ID.")
-#    elif not osf_token:
-#        st.warning("API token is required.")
-    else:
-        #output_path = os.path.join(output_dir, f"osf_export_{osf_id}.pdf")
-        #if output_path is None:
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        file_name = f"OSF_Project_{osf_id}_exported_{timestamp}.pdf"
-        output_path = os.path.join(output_dir,file_name)
-        #output_path = os.path.join(output_dir,f"OSF_Project_{osf_id}_exported_{timestamp}.pdf")
-        #output_path = f"OSF_Full_Metadata_Project_{project_id}.pdf"
-        st.write(output_path)  # just to verify the output
-
-        try:
-            with st.spinner("Generating PDF..."):
-                result = build_pdf(osf_id, is_test, output_path=output_path, api_token=osf_token, project_type=project_type)
-                #result = build_pdf(osf_id, is_test, output_path=output_path, api_token=osf_token)
-            st.success(f"PDF generated and saved to: {result}")
-            st.balloons()
-            with open(result, "rb") as file:
-                st.download_button(
-                    label=f"📥 Download PDF - {file_name}",
-                    data=file,
-                    #file_name=f"osf_export_{osf_id}.pdf",
-                    file_name=file_name,
-                    mime="application/pdf"
+        # Step 2: Generate the PDFs to a temp folder
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_count = 0  # Track number of files for better user messages
+            for root_idx in root_nodes:
+                pdf_obj, pdf_path = osfexport.write_pdf(
+                    projects,
+                    root_idx=root_idx,
+                    folder=tmpdir
                 )
-        except Exception as e:
-            st.error(f"Error generating PDF: {e}")
+                pdf_count += 1
+            
+            # Step 3: Create zip file and display download link
+            # Create a timestamp for the zip file
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            zip_filename = f'osf_projects_exported_{timestamp}'
+            archive = shutil.make_archive(zip_filename, 'zip', base_dir=tmpdir)
+            
+            st.info(f"📦 {pdf_count} PDF{'s' if pdf_count > 1 else ''} generated and compressed")
+            with open(archive, "rb") as file:
+                st.download_button(
+                    label=f"📄 Download {'all PDFs' if pdf_count > 1 else 'PDF'} as ZIP",
+                    data=file,
+                    file_name=f"{zip_filename}.zip",
+                    mime="application/zip"
+                )
+        st.success("✅ PDFs Generated!")

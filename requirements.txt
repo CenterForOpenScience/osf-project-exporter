@@ -6,3 +6,9 @@ pillow==11.3.0
 pytz==2025.2
 letter==0.5
 reportlab==4.4.2
+
+# TODO: Set this as dependency after v1.0 release
+#osfio-export-tool==0.1.1
+
+# Run this command to install the test release of this library
+#python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple osfio-export-tool==0.1.1
